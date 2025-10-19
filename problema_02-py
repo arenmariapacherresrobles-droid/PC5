@@ -1,0 +1,107 @@
+import pandas as pd
+import sqlite3
+
+
+#  LEER EL ARCHIVO CSV
+
+df = pd.read_csv("winemag-data-130k-v2.csv", index_col=0)
+print("✅ Archivo leído correctamente")
+print(df.head())
+
+# EXPLORACIÓN DE LOS DATOS
+
+print(" Información general:")
+print(df.info())
+print(" Descripción estadística:")
+print(df.describe())
+print(" Columnas originales:")
+print(df.columns)
+
+#  RENOMBRAR 4 COLUMNAS
+# -----------------------------
+df = df.rename(columns={
+    "country": "pais",
+    "points": "puntuacion",
+    "price": "precio",
+    "variety": "tipo_de_uva"
+})
+print("Columnas renombradas:")
+print(df.columns)
+
+# 4️⃣ CREAR 3 NUEVAS COLUMNAS
+# -----------------------------
+
+# 1. Clasificación del vino por calidad
+df["calidad_vino"] = pd.cut(df["puntuacion"],
+                            bins=[0, 85, 90, 95, 100],
+                            labels=["Regular", "Bueno", "Excelente", "Premium"])
+
+# 2. Rango de precios
+df["rango_precio"] = pd.cut(df["precio"],
+                            bins=[0, 20, 50, 100, 1000],
+                            labels=["Económico", "Medio", "Alto", "Exclusivo"])
+
+# 3. Etiqueta de continente según país (simplificada)
+def obtener_continente(pais):
+    if pais in ["US", "Canada", "Chile", "Argentina"]:
+        return "América"
+    elif pais in ["France", "Italy", "Spain", "Portugal", "Germany"]:
+        return "Europa"
+    elif pais in ["Australia", "New Zealand"]:
+        return "Oceanía"
+    elif pais in ["South Africa"]:
+        return "África"
+    else:
+        return "Otro"
+
+df["continente"] = df["pais"].apply(obtener_continente)
+
+print(" Nuevas columnas creadas:")
+print(df[["pais", "puntuacion", "precio", "calidad_vino", "rango_precio", "continente"]].head())
+
+# -----------------------------
+# REPORTES (4 reportes distintos)
+# -----------------------------
+
+#  Reporte 1: Promedio de precio y puntuación por país
+reporte1 = df.groupby("pais")[["precio", "puntuacion"]].mean().sort_values(by="puntuacion", ascending=False)
+print(" Reporte 1: Promedio de precio y puntuación por país")
+print(reporte1.head())
+
+#  Reporte 2: Conteo de vinos por continente y categoría de calidad
+reporte2 = df.groupby(["continente", "calidad_vino"]).size().unstack()
+print(" Reporte 2: Cantidad de vinos por continente y calidad")
+print(reporte2.head())
+
+# Reporte 3: Los 10 vinos más caros
+reporte3 = df.sort_values(by="precio", ascending=False)[["pais", "tipo_de_uva", "precio", "puntuacion"]].head(10)
+print(" Reporte 3: Los 10 vinos más caros")
+print(reporte3)
+
+#  Reporte 4: Promedio de puntuación por rango de precio
+reporte4 = df.groupby("rango_precio")["puntuacion"].mean().reset_index()
+print("Reporte 4: Puntuación promedio según rango de precio")
+print(reporte4)
+
+#  EXPORTAR LOS REPORTES
+# -----------------------------
+
+# CSV
+reporte1.to_csv("reporte1_promedio_pais.csv")
+
+# Excel
+reporte2.to_excel("reporte2_vinos_continente.xlsx")
+
+# SQLite
+conexion = sqlite3.connect("vinos.db")
+reporte3.to_sql("reporte3_vinos_caros", conexion, if_exists="replace", index=False)
+conexion.close()
+
+# JSON
+reporte4.to_json("reporte4_puntuacion_precio.json", orient="records")
+
+print("Archivos exportados exitosamente:")
+print(" - reporte1_promedio_pais.csv")
+print(" - reporte2_vinos_continente.xlsx")
+print(" - vinos.db (tabla: reporte3_vinos_caros)")
+print(" - reporte4_puntuacion_precio.json")
